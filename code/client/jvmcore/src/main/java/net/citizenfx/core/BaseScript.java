@@ -119,4 +119,75 @@ public abstract class BaseScript {
     protected void invokeNativeVoid(long hash, Object... args) {
         Native.invokeVoid(hash, args);
     }
+
+    // Scheduler methods
+
+    /**
+     * Schedule a task to run after a delay.
+     *
+     * @param delayMs Delay in milliseconds
+     * @param action Action to run
+     */
+    protected void scheduleDelayed(long delayMs, Runnable action) {
+        Scheduler.scheduleDelayed(delayMs, action);
+    }
+
+    /**
+     * Schedule a repeating task.
+     *
+     * @param intervalMs Interval in milliseconds
+     * @param action Action to run
+     * @return Scheduled task (can be canceled)
+     */
+    protected Scheduler.ScheduledTask scheduleRepeating(long intervalMs, Runnable action) {
+        return Scheduler.scheduleRepeating(intervalMs, action);
+    }
+
+    /**
+     * Schedule a task to run on the next tick.
+     *
+     * @param action Action to run
+     */
+    protected void scheduleNextTick(Runnable action) {
+        Scheduler.scheduleNextTick(action);
+    }
+
+    /**
+     * Start a coroutine.
+     *
+     * @param function Coroutine function
+     * @return Coroutine instance
+     */
+    protected Scheduler.Coroutine startCoroutine(Scheduler.CoroutineFunction function) {
+        return Scheduler.startCoroutine(function);
+    }
+
+    /**
+     * Create a delay yield instruction (for use in coroutines).
+     *
+     * @param milliseconds Delay in milliseconds
+     * @return Delay instruction
+     */
+    protected Scheduler.Delay delay(long milliseconds) {
+        return Scheduler.delay(milliseconds);
+    }
+
+    /**
+     * Wait until the next frame (for use in coroutines).
+     *
+     * @return Wait instruction
+     */
+    protected Scheduler.WaitForNextFrame waitForNextFrame() {
+        return Scheduler.waitForNextFrame();
+    }
+
+    /**
+     * Wait until a condition is met (for use in coroutines).
+     *
+     * @param condition Condition to wait for
+     * @return Wait instruction
+     */
+    protected Scheduler.WaitUntil waitUntil(Scheduler.BooleanSupplier condition) {
+        return Scheduler.waitUntil(condition);
+    }
 }

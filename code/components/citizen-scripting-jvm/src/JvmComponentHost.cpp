@@ -74,8 +74,8 @@ void JvmComponentHost::Initialize()
 	s_scriptInterfaceClass = (jclass)env->NewGlobalRef(localClass);
 	env->DeleteLocalRef(localClass);
 
-	// Register native methods
-	JNINativeMethod methods[] = {
+	// Register ScriptInterface native methods
+	JNINativeMethod scriptInterfaceMethods[] = {
 		{ const_cast<char*>("print"), const_cast<char*>("(Ljava/lang/String;Ljava/lang/String;)V"), (void*)&Java_CitizenFX_Core_ScriptInterface_Print },
 		{ const_cast<char*>("getNative"), const_cast<char*>("(J)J"), (void*)&Java_CitizenFX_Core_ScriptInterface_GetNative },
 		{ const_cast<char*>("invokeNative"), const_cast<char*>("(JLjava/lang/Object;J)Z"), (void*)&Java_CitizenFX_Core_ScriptInterface_InvokeNative },
@@ -88,13 +88,37 @@ void JvmComponentHost::Initialize()
 		{ const_cast<char*>("readClass"), const_cast<char*>("(JLjava/lang/String;[[B)Z"), (void*)&Java_CitizenFX_Core_ScriptInterface_ReadClass }
 	};
 
-	jint methodCount = sizeof(methods) / sizeof(methods[0]);
-	if (env->RegisterNatives(s_scriptInterfaceClass, methods, methodCount) != JNI_OK)
+	jint methodCount = sizeof(scriptInterfaceMethods) / sizeof(scriptInterfaceMethods[0]);
+	if (env->RegisterNatives(s_scriptInterfaceClass, scriptInterfaceMethods, methodCount) != JNI_OK)
 	{
 		env->ExceptionDescribe();
-		FatalError("Failed to register native methods\n");
+		FatalError("Failed to register ScriptInterface native methods\n");
 		return;
 	}
+
+	// Find and register Native class methods
+	jclass nativeClass = env->FindClass("net/citizenfx/core/Native");
+	if (!nativeClass)
+	{
+		env->ExceptionDescribe();
+		FatalError("Could not find Native class\n");
+		return;
+	}
+
+	JNINativeMethod nativeMethods[] = {
+		{ const_cast<char*>("getNativePointer"), const_cast<char*>("(J)J"), (void*)&Java_net_citizenfx_core_Native_getNativePointer },
+		{ const_cast<char*>("invokeNativeInternal"), const_cast<char*>("(JJ[JI[J[I[B)V"), (void*)&Java_net_citizenfx_core_Native_invokeNativeInternal }
+	};
+
+	jint nativeMethodCount = sizeof(nativeMethods) / sizeof(nativeMethods[0]);
+	if (env->RegisterNatives(nativeClass, nativeMethods, nativeMethodCount) != JNI_OK)
+	{
+		env->ExceptionDescribe();
+		FatalError("Failed to register Native class methods\n");
+		return;
+	}
+
+	env->DeleteLocalRef(nativeClass);
 
 	InitializeMethods();
 
@@ -261,6 +285,99 @@ jboolean JNICALL JvmComponentHost::Java_CitizenFX_Core_ScriptInterface_ReadClass
 	auto* rt = reinterpret_cast<JvmScriptRuntime*>(runtime);
 	jbyteArray* bytes = reinterpret_cast<jbyteArray*>(outBytes);
 	return ReadClassUGC(rt, name, bytes) ? JNI_TRUE : JNI_FALSE;
+}
+
+// Native class JNI implementations
+jlong JNICALL JvmComponentHost::Java_net_citizenfx_core_Native_getNativePointer(JNIEnv* env, jclass cls, jlong hash)
+{
+	return static_cast<jlong>(GetNative(static_cast<uint64_t>(hash)));
+}
+
+void JNICALL JvmComponentHost::Java_net_citizenfx_core_Native_invokeNativeInternal(JNIEnv* env, jclass cls, jlong nativePtr, jlong hash,
+	jlongArray args, jint argCount, jlongArray returnData, jintArray returnCount, jbyteArray stringHeap)
+{
+	if (nativePtr == 0)
+	{
+		env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Invalid native pointer");
+		return;
+	}
+
+	// Get the native handler
+	NativeHandler native = reinterpret_cast<NativeHandler>(nativePtr);
+
+	// Get Java arrays
+	jlong* argArray = env->GetLongArrayElements(args, nullptr);
+	jlong* retArray = env->GetLongArrayElements(returnData, nullptr);
+	jbyte* stringHeapArray = env->GetByteArrayElements(stringHeap, nullptr);
+
+	try
+	{
+		// Create native context
+#ifdef IS_FXSERVER
+		fx::ScriptContext context;
+#else
+		rage::scrNativeCallContext context;
+#endif
+
+		// Copy arguments to context
+		// Arguments are stored as 64-bit values
+		uint64_t* contextArgs = new uint64_t[argCount];
+		for (int i = 0; i < argCount; i++)
+		{
+			contextArgs[i] = static_cast<uint64_t>(argArray[i]);
+		}
+
+		// Initialize context
+#ifdef IS_FXSERVER
+		context.SetArgumentBuffer(contextArgs, argCount);
+#else
+		// For client, we need to set up the rage context
+		for (int i = 0; i < argCount; i++)
+		{
+			context.Push(contextArgs[i]);
+		}
+#endif
+
+		// Invoke the native
+		InvokeNative(native, &context, static_cast<uint64_t>(hash));
+
+		// Get return values
+#ifdef IS_FXSERVER
+		int numResults = context.GetArgumentCount();
+		for (int i = 0; i < numResults && i < 32; i++)
+		{
+			retArray[i] = static_cast<jlong>(context.GetArgument<uint64_t>(i));
+		}
+#else
+		// For client (rage context)
+		int numResults = 1; // Most natives return one value
+		if (numResults > 0)
+		{
+			retArray[0] = static_cast<jlong>(*context.GetArgumentBuffer());
+		}
+#endif
+
+		// Set return count
+		jint retCountValue = numResults;
+		env->SetIntArrayRegion(returnCount, 0, 1, &retCountValue);
+
+		delete[] contextArgs;
+	}
+	catch (const std::exception& e)
+	{
+		env->ReleaseByteArrayElements(stringHeap, stringHeapArray, 0);
+		env->ReleaseLongArrayElements(returnData, retArray, 0);
+		env->ReleaseLongArrayElements(args, argArray, 0);
+
+		std::string errorMsg = fmt::sprintf("Error invoking native 0x%016llx: %s", hash, e.what());
+		env->ThrowNew(env->FindClass("java/lang/RuntimeException"), errorMsg.c_str());
+		return;
+	}
+
+	// Release arrays
+	env->ReleaseByteArrayElements(stringHeap, stringHeapArray, 0);
+	env->ReleaseLongArrayElements(returnData, retArray, 0);
+	env->ReleaseLongArrayElements(args, argArray, 0);
 }
 }
 

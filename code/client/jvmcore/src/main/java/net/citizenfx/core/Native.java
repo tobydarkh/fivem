@@ -5,6 +5,14 @@ package net.citizenfx.core;
  * This provides a bridge to the native function invocation system.
  */
 public class Native {
+    // Thread-local context to avoid allocations
+    private static final ThreadLocal<NativeContext> context = ThreadLocal.withInitial(NativeContext::new);
+
+    // Native methods (implemented in C++)
+    private static native long getNativePointer(long hash);
+    private static native void invokeNativeInternal(long nativePtr, long hash, long[] args, int argCount,
+                                                     long[] returnData, int[] returnCount, byte[] stringHeap);
+
     /**
      * Invoke a native function by hash.
      *
@@ -13,11 +21,51 @@ public class Native {
      * @return The result of the native invocation
      */
     public static Object invoke(long hash, Object... args) {
-        // TODO: Implement native invocation
-        // 1. Get native handler pointer from C++
-        // 2. Marshal arguments into native context
-        // 3. Invoke the native
-        // 4. Marshal return value back to Java
+        NativeContext ctx = context.get();
+        ctx.reset();
+
+        // Marshal arguments
+        for (Object arg : args) {
+            if (arg == null) {
+                ctx.pushArg(0L);
+            } else if (arg instanceof Integer) {
+                ctx.pushArg((Integer) arg);
+            } else if (arg instanceof Long) {
+                ctx.pushArg((Long) arg);
+            } else if (arg instanceof Float) {
+                ctx.pushArg((Float) arg);
+            } else if (arg instanceof Double) {
+                ctx.pushArg((Double) arg);
+            } else if (arg instanceof Boolean) {
+                ctx.pushArg((Boolean) arg);
+            } else if (arg instanceof String) {
+                ctx.pushArg((String) arg);
+            } else if (arg instanceof Vector3) {
+                ctx.pushArg((Vector3) arg);
+            } else {
+                ctx.pushArg(arg);
+            }
+        }
+
+        // Get native pointer and invoke
+        long nativePtr = getNativePointer(hash);
+        if (nativePtr == 0) {
+            ScriptInterface.printMessage("error", String.format("Native 0x%016X not found", hash));
+            return null;
+        }
+
+        long[] returnData = new long[32];
+        int[] returnCount = new int[1];
+
+        invokeNativeInternal(nativePtr, hash, ctx.getArguments(), ctx.getArgumentCount(),
+                           returnData, returnCount, ctx.getStringHeap());
+
+        ctx.setReturnData(returnData, returnCount[0]);
+
+        // Return as object (caller can cast)
+        if (returnCount[0] > 0) {
+            return returnData[0];
+        }
         return null;
     }
 

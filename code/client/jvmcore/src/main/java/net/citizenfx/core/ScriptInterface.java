@@ -55,9 +55,12 @@ public class ScriptInterface {
                 profilerEnterScope("JVM.Tick");
             }
 
-            // TODO: Process scheduled tasks, coroutines, etc.
-            // For now, schedule next tick for 100ms from now
-            requestTick(gameTime + 100);
+            // Process scheduled tasks and coroutines
+            Scheduler.tick(gameTime);
+
+            // Request next tick based on scheduler's next scheduled time
+            long nextScheduledTime = Scheduler.getNextScheduledTime();
+            requestTick(nextScheduledTime);
 
             if (profiling && profilerIsRecording()) {
                 profilerExitScope();
@@ -78,8 +81,24 @@ public class ScriptInterface {
                 profilerEnterScope("JVM.TriggerEvent." + eventName);
             }
 
-            print("script", String.format("Event triggered: %s from %s", eventName, sourceId));
-            // TODO: Deserialize args using MsgPack and dispatch to event handlers
+            // Deserialize arguments
+            Object[] args = new Object[0];
+            if (argsSerialized != null && argsSerialized.length > 0) {
+                try {
+                    Object deserialized = MsgPackSerializer.deserialize(argsSerialized);
+                    if (deserialized instanceof java.util.List) {
+                        java.util.List<?> list = (java.util.List<?>) deserialized;
+                        args = list.toArray();
+                    } else if (deserialized != null) {
+                        args = new Object[] { deserialized };
+                    }
+                } catch (Exception e) {
+                    print("error", "Failed to deserialize event args: " + e.getMessage());
+                }
+            }
+
+            // Dispatch to event manager
+            EventManager.trigger(eventName, args);
 
             if (profiling && profilerIsRecording()) {
                 profilerExitScope();

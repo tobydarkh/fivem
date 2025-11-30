@@ -124,6 +124,11 @@ private:
 	static jarray JNICALL Java_CitizenFX_Core_ScriptInterface_CanonicalizeRef(JNIEnv* env, jclass cls, jlong runtime, jint refId);
 	static jarray JNICALL Java_CitizenFX_Core_ScriptInterface_InvokeFunctionReference(JNIEnv* env, jclass cls, jlong runtime, jstring refId, jarray args);
 	static jboolean JNICALL Java_CitizenFX_Core_ScriptInterface_ReadClass(JNIEnv* env, jclass cls, jlong runtime, jstring name, jobjectArray outBytes);
+
+	// Native class JNI methods
+	static jlong JNICALL Java_net_citizenfx_core_Native_getNativePointer(JNIEnv* env, jclass cls, jlong hash);
+	static void JNICALL Java_net_citizenfx_core_Native_invokeNativeInternal(JNIEnv* env, jclass cls, jlong nativePtr, jlong hash,
+		jlongArray args, jint argCount, jlongArray returnData, jintArray returnCount, jbyteArray stringHeap);
 };
 
 inline JavaVM* JvmComponentHost::GetJVM()
