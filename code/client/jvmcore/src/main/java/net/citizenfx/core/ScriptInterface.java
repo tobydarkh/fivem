@@ -3,6 +3,8 @@ package net.citizenfx.core;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Main bridge interface between native C++ code and Java/JVM runtime.
@@ -17,6 +19,12 @@ public class ScriptInterface {
     private static final AtomicLong nextScheduledTime = new AtomicLong(Long.MAX_VALUE);
     private static final ConcurrentHashMap<Integer, Object> references = new ConcurrentHashMap<>();
     private static int nextRefId = 1;
+
+    // Resource class loader for this resource
+    private static ResourceClassLoader classLoader;
+
+    // Loaded script instances
+    private static final List<BaseScript> loadedScripts = new ArrayList<>();
 
     // Native methods implemented in C++
     private static native void print(String channel, String text);
@@ -41,6 +49,9 @@ public class ScriptInterface {
         runtimePtr = runtime;
         instanceId = instId;
         sharedDataPtr = sharedData;
+
+        // Create resource class loader
+        classLoader = new ResourceClassLoader(resourceName, ScriptInterface.class.getClassLoader());
 
         print("script", String.format("Initialized JVM gamemode runtime for resource: %s (instance: %d)",
             resourceName, instanceId));
@@ -114,8 +125,25 @@ public class ScriptInterface {
      */
     public static void loadClass(String file) {
         try {
-            print("script", "Loading class/JAR: " + file);
-            // TODO: Load JAR using URLClassLoader and instantiate main class
+            print("script", "Loading JAR: " + file);
+
+            // Load JAR into class loader
+            classLoader.loadJar(file);
+
+            // Find and instantiate main class
+            Object mainInstance = classLoader.findAndInstantiateMainClass();
+
+            if (mainInstance instanceof BaseScript) {
+                BaseScript script = (BaseScript) mainInstance;
+                loadedScripts.add(script);
+
+                // Call onLoad
+                script.onLoad();
+
+                print("script", "Successfully loaded and initialized gamemode from: " + file);
+            } else {
+                print("warning", "No BaseScript subclass found in: " + file);
+            }
         } catch (Exception e) {
             print("error", "Exception in loadClass: " + e.getMessage());
             e.printStackTrace();

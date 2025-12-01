@@ -190,4 +190,67 @@ public abstract class BaseScript {
     protected Scheduler.WaitUntil waitUntil(Scheduler.BooleanSupplier condition) {
         return Scheduler.waitUntil(condition);
     }
+
+    // Exports/Externals methods
+
+    /**
+     * Register an export.
+     *
+     * @param name Export name
+     * @param function Function to export
+     */
+    protected void export(String name, ExportsManager.ExportedFunction function) {
+        ExportsManager.add(name, function);
+    }
+
+    /**
+     * Auto-export all public methods from this script.
+     */
+    protected void exportAll() {
+        ExportsManager.exportObject(this);
+    }
+
+    /**
+     * Auto-export all public methods with a prefix.
+     *
+     * @param prefix Prefix for export names
+     */
+    protected void exportAll(String prefix) {
+        ExportsManager.exportObject(this, prefix);
+    }
+
+    /**
+     * Get a handle to another resource for calling its exports.
+     *
+     * @param resourceName Name of the resource
+     * @return Resource handle
+     */
+    protected ExternalsManager.ResourceHandle getResource(String resourceName) {
+        return ExternalsManager.getResource(resourceName);
+    }
+
+    /**
+     * Call an export from another resource.
+     *
+     * @param resourceName Name of the resource
+     * @param exportName Name of the export
+     * @param args Arguments to pass
+     * @return Result from the export
+     */
+    protected Object callExternal(String resourceName, String exportName, Object... args) {
+        return ExternalsManager.call(resourceName, exportName, args);
+    }
+
+    /**
+     * Call an export from another resource with a specific return type.
+     *
+     * @param returnType Expected return type
+     * @param resourceName Name of the resource
+     * @param exportName Name of the export
+     * @param args Arguments to pass
+     * @return Result from the export
+     */
+    protected <T> T callExternal(Class<T> returnType, String resourceName, String exportName, Object... args) {
+        return ExternalsManager.call(returnType, resourceName, exportName, args);
+    }
 }
