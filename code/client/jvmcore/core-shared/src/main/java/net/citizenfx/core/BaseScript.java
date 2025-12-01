@@ -1,0 +1,239 @@
+package net.citizenfx.core;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Base class for FiveM gamemodes written in Java.
+ * Extend this class to create your gamemode.
+ */
+public abstract class BaseScript {
+    private final List<EventManager.EventHandler> registeredHandlers = new ArrayList<>();
+
+    /**
+     * Called when the script is loaded.
+     * Override this method to initialize your gamemode.
+     */
+    public void onLoad() {
+        // Override in subclass
+    }
+
+    /**
+     * Called when the script is unloaded.
+     * Override this method to clean up resources.
+     */
+    public void onUnload() {
+        // Unregister all event handlers
+        for (EventManager.EventHandler handler : registeredHandlers) {
+            // TODO: Unregister handlers
+        }
+        registeredHandlers.clear();
+    }
+
+    /**
+     * Register an event handler.
+     *
+     * @param eventName The name of the event to listen for
+     * @param handler The handler function
+     */
+    protected void on(String eventName, EventManager.EventHandler handler) {
+        EventManager.on(eventName, handler);
+        registeredHandlers.add(handler);
+    }
+
+    /**
+     * Trigger an event locally.
+     *
+     * @param eventName The name of the event to trigger
+     * @param args Arguments to pass to the event handlers
+     */
+    protected void trigger(String eventName, Object... args) {
+        EventManager.trigger(eventName, args);
+    }
+
+    /**
+     * Trigger an event on the server.
+     *
+     * @param eventName The name of the event to trigger
+     * @param args Arguments to pass to the event
+     */
+    protected void triggerServer(String eventName, Object... args) {
+        EventManager.triggerServer(eventName, args);
+    }
+
+    /**
+     * Trigger an event on a specific client (server-side only).
+     *
+     * @param target The target player/client
+     * @param eventName The name of the event to trigger
+     * @param args Arguments to pass to the event
+     */
+    protected void triggerClient(Object target, String eventName, Object... args) {
+        EventManager.triggerClient(target, eventName, args);
+    }
+
+    /**
+     * Print a message to the console.
+     *
+     * @param message The message to print
+     */
+    protected void print(String message) {
+        ScriptInterface.printMessage("script", message);
+    }
+
+    /**
+     * Print an error message to the console.
+     *
+     * @param message The error message to print
+     */
+    protected void printError(String message) {
+        ScriptInterface.printMessage("error", message);
+    }
+
+    /**
+     * Print a warning message to the console.
+     *
+     * @param message The warning message to print
+     */
+    protected void printWarning(String message) {
+        ScriptInterface.printMessage("warning", message);
+    }
+
+    // Note: For native invocation, use the Native class from either:
+    // - net.citizenfx.core.client.Native (for client-side)
+    // - net.citizenfx.core.server.Native (for server-side)
+
+    // Scheduler methods
+
+    /**
+     * Schedule a task to run after a delay.
+     *
+     * @param delayMs Delay in milliseconds
+     * @param action Action to run
+     */
+    protected void scheduleDelayed(long delayMs, Runnable action) {
+        Scheduler.scheduleDelayed(delayMs, action);
+    }
+
+    /**
+     * Schedule a repeating task.
+     *
+     * @param intervalMs Interval in milliseconds
+     * @param action Action to run
+     * @return Scheduled task (can be canceled)
+     */
+    protected Scheduler.ScheduledTask scheduleRepeating(long intervalMs, Runnable action) {
+        return Scheduler.scheduleRepeating(intervalMs, action);
+    }
+
+    /**
+     * Schedule a task to run on the next tick.
+     *
+     * @param action Action to run
+     */
+    protected void scheduleNextTick(Runnable action) {
+        Scheduler.scheduleNextTick(action);
+    }
+
+    /**
+     * Start a coroutine.
+     *
+     * @param function Coroutine function
+     * @return Coroutine instance
+     */
+    protected Scheduler.Coroutine startCoroutine(Scheduler.CoroutineFunction function) {
+        return Scheduler.startCoroutine(function);
+    }
+
+    /**
+     * Create a delay yield instruction (for use in coroutines).
+     *
+     * @param milliseconds Delay in milliseconds
+     * @return Delay instruction
+     */
+    protected Scheduler.Delay delay(long milliseconds) {
+        return Scheduler.delay(milliseconds);
+    }
+
+    /**
+     * Wait until the next frame (for use in coroutines).
+     *
+     * @return Wait instruction
+     */
+    protected Scheduler.WaitForNextFrame waitForNextFrame() {
+        return Scheduler.waitForNextFrame();
+    }
+
+    /**
+     * Wait until a condition is met (for use in coroutines).
+     *
+     * @param condition Condition to wait for
+     * @return Wait instruction
+     */
+    protected Scheduler.WaitUntil waitUntil(Scheduler.BooleanSupplier condition) {
+        return Scheduler.waitUntil(condition);
+    }
+
+    // Exports/Externals methods
+
+    /**
+     * Register an export.
+     *
+     * @param name Export name
+     * @param function Function to export
+     */
+    protected void export(String name, ExportsManager.ExportedFunction function) {
+        ExportsManager.add(name, function);
+    }
+
+    /**
+     * Auto-export all public methods from this script.
+     */
+    protected void exportAll() {
+        ExportsManager.exportObject(this);
+    }
+
+    /**
+     * Auto-export all public methods with a prefix.
+     *
+     * @param prefix Prefix for export names
+     */
+    protected void exportAll(String prefix) {
+        ExportsManager.exportObject(this, prefix);
+    }
+
+    /**
+     * Get a handle to another resource for calling its exports.
+     *
+     * @param resourceName Name of the resource
+     * @return Resource handle
+     */
+    protected ExternalsManager.ResourceHandle getResource(String resourceName) {
+        return ExternalsManager.getResource(resourceName);
+    }
+
+    /**
+     * Call an export from another resource.
+     *
+     * @param resourceName Name of the resource
+     * @param exportName Name of the export
+     * @param args Arguments to pass
+     * @return Result from the export
+     */
+    protected Object callExternal(String resourceName, String exportName, Object... args) {
+        return ExternalsManager.call(resourceName, exportName, args);
+    }
+
+    /**
+     * Call an export from another resource with a specific return type.
+     *
+     * @param returnType Expected return type
+     * @param resourceName Name of the resource
+     * @param exportName Name of the export
+     * @param args Arguments to pass
+     * @return Result from the export
+     */
+    protected <T> T callExternal(Class<T> returnType, String resourceName, String exportName, Object... args) {
+        return ExternalsManager.call(returnType, resourceName, exportName, args);
+    }
+}
